@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Peta Hotspot untuk Tim Lapangan</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#10151c;--panel:#18202b;--line:#2c3a4a;--text:#eaf0f6;--mute:#93a4b6}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:system-ui,"Segoe UI",Arial,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:17px;flex:1 1 auto}
+header small{display:block;color:var(--mute);font-size:12px;font-weight:400}
+button{background:#25364a;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 12px;font-size:14px}
+button:active{background:#33506f}
+main{flex:1;display:flex;flex-direction:column;min-height:0}
+#map{flex:1;min-height:0}
+#list{height:38%;overflow:auto;border-top:1px solid var(--line);background:var(--panel);padding-bottom:env(safe-area-inset-bottom)}
+.it{display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);align-items:flex-start}
+.it:active{background:#223044}
+.dot{width:14px;height:14px;border-radius:50%;margin-top:3px;flex:none}
+.it b{font-size:15px}.it span{display:block;color:var(--mute);font-size:13px;line-height:1.4}
+.cl{display:flex;align-items:center;justify-content:center;border-radius:50%;border:2px solid #fff;color:#fff;font-weight:700;box-shadow:0 0 0 3px #0006}
+.pop{font-size:14px;line-height:1.5;min-width:220px}
+.pop h3{font-size:15px;margin-bottom:2px}
+.pop .k{font-size:16px;font-weight:700;margin:4px 0}
+.pop a,.pop button{display:inline-block;margin:6px 6px 0 0;padding:8px 10px;border-radius:6px;background:#1a73e8;color:#fff;text-decoration:none;border:0;font-size:14px}
+.pop button{background:#455a64}
+.pts{font-size:13px;line-height:1.55;max-height:150px;overflow:auto;margin-top:2px;font-variant-numeric:tabular-nums;color:#333}
+.pop ul{margin:6px 0 0 16px;padding:0;font-size:13px;color:#444}
+.empty{padding:16px;color:var(--mute)}
+@media (min-width:800px){main{flex-direction:row}#list{width:380px;height:auto;border-top:0;border-left:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hotspot untuk Tim Lapangan<small id="ket">Memuat...</small></h1>
+  <button id="bGPS">Lokasi saya</button>
+  <button id="bRef">Perbarui</button>
+</header>
+<main><div id="map"></div><div id="list"></div></main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ================= PENGATURAN ================= */
+const CONFIG = {
+  JAM_TAMPIL: 24,         // hanya hotspot dalam X jam terakhir yang ditampilkan
+  BUFFER_KM: 2,           // hotspot di luar batas konsesi tetap ditampilkan jika jaraknya <= nilai ini (km). 0 = hanya di dalam batas
+  ORORA_JAM: 24,          // titik OroraTech (sheet ORORA) ditampilkan sampai X jam ke belakang
+  KLASTER_METER: 1000,    // titik yang jaraknya <= nilai ini digabung jadi satu klaster
+  SEMBUNYIKAN_LOW: false, // true = sembunyikan hotspot confidence rendah
+  // Alamat web app Apps Script (berakhiran /exec). Hotspot FIRMS dan titik OroraTech diambil lewat sini; kunci FIRMS tersimpan di server. Kosong = mode demo
+  API_URL: 'https://script.google.com/macros/s/AKfycbxOMQltGWm7AjOqp6Bwif4fdnS8snQU0uZXpgUIslfhUx9h6-SyiSIk6-Htmcp4YPA/exec',
+  REFRESH_MIN: 15,
+  DISTRIK: [
+    {kode:'FSS',warna:'#4da3ff',rings:[[[116.4517,-1.1868],[116.4497,-1.1884],[116.4491,-1.1916],[116.4507,-1.1942],[116.4523,-1.194],[116.4524,-1.1962],[116.4578,-1.1965],[116.4582,-1.2004],[116.4601,-1.2019],[116.4615,-1.2012],[116.4629,-1.2044],[116.4638,-1.2029],[116.468,-1.2031],[116.4687,-1.2054],[116.4716,-1.2035],[116.4735,-1.2053],[116.4731,-1.2082],[116.475,-1.209],[116.4756,-1.2079],[116.4761,-1.2098],[116.4772,-1.2095],[116.4784,-1.2127],[116.4771,-1.2156],[116.4795,-1.2158],[116.4792,-1.2174],[116.4813,-1.2186],[116.4805,-1.2199],[116.4825,-1.2195],[116.4843,-1.2216],[116.4863,-1.227],[116.486,-1.2318],[116.4896,-1.2327],[116.4879,-1.2325],[116.4879,-1.2338],[116.4906,-1.2355],[116.4898,-1.2376],[116.4929,-1.2396],[116.4936,-1.2387],[116.4967,-1.2441],[116.5036,-1.2436],[116.5055,-1.2491],[116.5087,-1.2485],[116.5098,-1.254],[116.5108,-1.251],[116.5122,-1.2513],[116.511,-1.2567],[116.5129,-1.2581],[116.5136,-1.257],[116.5127,-1.2587],[116.5162,-1.2612],[116.5128,-1.2618],[116.5151,-1.2659],[116.5165,-1.2645],[116.5177,-1.2657],[116.5158,-1.2688],[116.5195,-1.2693],[116.5188,-1.2719],[116.5215,-1.2718],[116.5203,-1.274],[116.523,-1.2764],[116.5259,-1.276],[116.5237,-1.2815],[116.5262,-1.281],[116.5273,-1.2833],[116.5252,-1.2852],[116.5241,-1.2897],[116.5256,-1.2933],[116.5286,-1.2949],[116.5288,-1.2994],[116.5254,-1.312],[116.5087,-1.3201],[116.4808,-1.3272],[116.4507,-1.3442],[116.4192,-1.3541],[116.4197,-1.3341],[116.4178,-1.3137],[116.4203,-1.3106],[116.2758,-1.3125],[116.2634,-1.3312],[116.1943,-1.3827],[116.1929,-1.3797],[116.1954,-1.3642],[116.1879,-1.3488],[116.1834,-1.3449],[116.1733,-1.3428],[116.16,-1.3288],[116.1576,-1.3294],[116.151,-1.3253],[116.149,-1.3159],[116.1527,-1.3167],[116.1569,-1.3145],[116.1587,-1.3088],[116.1577,-1.3076],[116.1477,-1.3096],[116.1418,-1.3058],[116.1424,-1.3019],[116.1391,-1.3005],[116.1374,-1.2974],[116.1326,-1.2992],[116.1334,-1.3021],[116.1376,-1.3021],[116.1378,-1.3035],[116.1346,-1.3058],[116.1269,-1.3002],[116.1215,-1.3016],[116.1217,-1.2989],[116.1189,-1.2973],[116.1195,-1.2946],[116.1167,-1.2874],[116.1141,-1.2857],[116.1071,-1.2852],[116.1008,-1.276],[116.0939,-1.271],[116.0922,-1.2669],[116.0939,-1.2579],[116.0822,-1.2524],[116.0725,-1.2418],[116.0677,-1.2452],[116.0618,-1.2419],[116.0603,-1.2394],[116.0561,-1.2387],[116.1233,-1.1993],[116.1274,-1.1985],[116.1495,-1.1837],[116.1546,-1.1947],[116.1637,-1.2034],[116.1718,-1.2054],[116.1838,-1.2173],[116.1895,-1.2195],[116.1947,-1.2263],[116.2086,-1.2328],[116.2166,-1.2334],[116.2233,-1.231],[116.2313,-1.2098],[116.2398,-1.2102],[116.245,-1.2129],[116.2479,-1.2219],[116.2543,-1.2244],[116.2581,-1.2436],[116.2455,-1.2597],[116.2472,-1.2664],[116.2547,-1.2686],[116.2608,-1.2661],[116.2675,-1.2678],[116.2705,-1.2631],[116.2808,-1.2553],[116.3064,-1.2417],[116.3141,-1.2314],[116.3191,-1.2275],[116.3255,-1.2278],[116.3394,-1.2339],[116.3564,-1.235],[116.3644,-1.23],[116.3741,-1.2206],[116.388,-1.2222],[116.3997,-1.2095],[116.4,-1.205],[116.4058,-1.1973],[116.4047,-1.1914],[116.4194,-1.1906],[116.4292,-1.1856],[116.436,-1.1785],[116.4391,-1.1785]]]},
+    {kode:'DML',warna:'#ffd24d',rings:[[[116.0508,-0.0499],[116.051,-0.0522],[116.0552,-0.0518],[116.0614,-0.0608],[116.0744,-0.06],[116.0797,-0.0673],[116.0841,-0.0637],[116.091,-0.0682],[116.0973,-0.0676],[116.0994,-0.0693],[116.1031,-0.0795],[116.1059,-0.0789],[116.1092,-0.0843],[116.1127,-0.0853],[116.12,-0.0983],[116.1257,-0.1006],[116.1374,-0.1118],[116.1233,-0.1135],[116.1121,-0.1171],[116.0956,-0.1309],[116.084,-0.1453],[116.0728,-0.1644],[116.0655,-0.1707],[116.0619,-0.1805],[116.0413,-0.2084],[116.0361,-0.2131],[116.0347,-0.2118],[116.0131,-0.226],[116.0205,-0.1987],[116.0172,-0.1912],[116.0205,-0.1758],[115.877,-0.1109],[115.8525,-0.1346],[115.8338,-0.1077],[115.8686,-0.0699],[115.9322,-0.0939],[115.9978,-0.014],[116.0122,-0.0135],[116.0503,-0.0413]],[[115.4459,0.7561],[115.4433,0.7481],[115.4005,0.7163],[115.4029,0.6965],[115.4067,0.6905],[115.4155,0.6825],[115.4233,0.6693],[115.4379,0.6645],[115.4533,0.6647],[115.4593,0.6519],[115.4695,0.6461],[115.4823,0.6463],[115.4845,0.6451],[115.4867,0.6465],[115.4893,0.6445],[115.4925,0.6453],[115.4947,0.6433],[115.4993,0.6461],[115.5003,0.6435],[115.5047,0.6437],[115.5073,0.6459],[115.5085,0.6449],[115.5103,0.6425],[115.5085,0.6177],[115.5095,0.6003],[115.5155,0.5669],[115.5033,0.5677],[115.4903,0.5729],[115.4529,0.6203],[115.3865,0.6617],[115.3849,0.6697],[115.3699,0.6707],[115.3489,0.6551],[115.3447,0.6679],[115.3625,0.6773],[115.3901,0.7189],[115.3907,0.7233],[115.3893,0.7257],[115.3927,0.7279],[115.3925,0.7327],[115.3959,0.7341],[115.4025,0.7327],[115.4053,0.7365],[115.4077,0.7367],[115.4137,0.7411],[115.4153,0.7449],[115.4207,0.7503],[115.4209,0.7525],[115.4245,0.7521],[115.4239,0.7555],[115.4279,0.7575],[115.4305,0.7655],[115.4293,0.7703],[115.4319,0.7739],[115.4319,0.7819],[115.4515,0.7715]],[[115.3133,0.8228],[115.3111,0.8125],[115.3121,0.8089],[115.3101,0.8042],[115.3133,0.8045],[115.3137,0.8017],[115.3163,0.7998],[115.3299,0.7647],[115.3301,0.7462],[115.3161,0.7273],[115.3121,0.7132],[115.3023,0.6962],[115.2947,0.703],[115.2789,0.7122],[115.3031,0.7442],[115.2271,0.7387],[115.2551,0.7738],[115.2493,0.8075],[115.2341,0.8371],[115.2247,0.8457],[115.2167,0.8488],[115.2341,0.8864],[115.3173,0.8424]]]},
+    {kode:'SRL',warna:'#d98cff',rings:[[[115.9545,0.399],[115.9557,0.3981],[115.9633,0.4014],[115.9673,0.3997],[115.9594,0.3952],[115.9744,0.3831],[115.9739,0.4086],[115.9825,0.407],[115.9828,0.4051],[115.9848,0.4049],[115.9852,0.4014],[115.9869,0.4017],[115.9871,0.4033],[115.9883,0.4034],[115.9887,0.4011],[115.9911,0.4022],[115.9904,0.3996],[115.9945,0.4019],[115.993,0.4032],[115.9946,0.4041],[115.9939,0.4057],[116.0,0.4044],[116.0019,0.4054],[116.0028,0.4025],[116.0072,0.4024],[116.0122,0.4066],[116.0144,0.4041],[116.0185,0.4087],[116.0208,0.4072],[116.0201,0.4051],[116.0251,0.4066],[116.0271,0.4038],[116.0299,0.4064],[116.0298,0.4086],[116.0322,0.4085],[116.0309,0.4051],[116.034,0.4061],[116.0329,0.4034],[116.0358,0.4028],[116.0359,0.3998],[116.0338,0.3998],[116.0361,0.3978],[116.0402,0.3996],[116.0395,0.4026],[116.0415,0.4026],[116.0424,0.3999],[116.0439,0.4034],[116.0457,0.4031],[116.0484,0.3996],[116.0509,0.3911],[116.0598,0.3809],[116.0652,0.3779],[116.0685,0.3719],[116.0724,0.3705],[116.0798,0.3716],[116.0808,0.3682],[116.0774,0.3667],[116.0779,0.3633],[116.0694,0.3559],[116.0672,0.3601],[116.0617,0.3638],[116.0611,0.3745],[116.0525,0.3793],[116.05,0.386],[116.0466,0.3911],[116.0446,0.3912],[116.0359,0.3836],[116.0281,0.3833],[116.0272,0.3811],[116.0225,0.3803],[116.0216,0.3771],[116.0169,0.3739],[116.0066,0.369],[115.9933,0.35],[115.9937,0.3322],[116.0024,0.3327],[116.0033,0.3354],[116.002,0.3407],[116.0048,0.3386],[116.0175,0.3358],[116.0243,0.336],[116.0283,0.339],[116.0361,0.3509],[116.0437,0.3588],[116.0465,0.3582],[116.0516,0.3627],[116.0551,0.3621],[116.0571,0.3526],[116.0479,0.3548],[116.0434,0.3544],[116.0348,0.3341],[116.0358,0.3321],[116.0392,0.3317],[116.0435,0.3355],[116.0664,0.3116],[116.0661,0.308],[116.0686,0.304],[116.0737,0.3048],[116.0788,0.2981],[116.0883,0.2794],[116.0725,0.2793],[116.2133,0.1662],[116.2172,0.171],[116.2309,0.1597],[116.2347,0.1593],[116.2395,0.1624],[116.2542,0.1849],[116.2478,0.2064],[116.311,0.1705],[116.34,0.1289],[116.3422,0.1186],[116.3298,0.1142],[116.3058,0.1122],[116.2112,0.1587],[116.1611,0.1702],[116.1059,0.1666],[116.0581,0.1609],[116.0402,0.1547],[116.0183,0.1415],[116.0128,0.1406],[115.9899,0.1389],[115.9438,0.1439],[115.9231,0.1386],[115.9163,0.1687],[115.9164,0.206],[115.8965,0.2127],[115.8587,0.2057],[115.8249,0.1966],[115.8085,0.234],[115.8125,0.2354],[115.8251,0.2292],[115.8436,0.2302],[115.8609,0.2397],[115.8688,0.2513],[115.8606,0.2908],[115.8502,0.3095],[115.8103,0.3595],[115.8482,0.3833],[115.858,0.3925],[115.8648,0.4023],[115.8716,0.4169],[115.8941,0.4823],[115.902,0.5008],[115.9461,0.5579]]]},
+    {kode:'AHL',warna:'#6fe3a5',rings:[[[115.7368,-1.525],[115.7378,-1.5292],[115.7334,-1.5363],[115.7338,-1.5341],[115.7322,-1.5336],[115.732,-1.5384],[115.7296,-1.5402],[115.7309,-1.5419],[115.7287,-1.5443],[115.7317,-1.5459],[115.7295,-1.5513],[115.7325,-1.5514],[115.7317,-1.5577],[115.7341,-1.5568],[115.737,-1.5604],[115.7334,-1.5614],[115.7336,-1.565],[115.7356,-1.5662],[115.7302,-1.5683],[115.7307,-1.5704],[115.7334,-1.5709],[115.7281,-1.5729],[115.7289,-1.5763],[115.723,-1.5762],[115.723,-1.567],[115.7043,-1.5673],[115.7034,-1.637],[115.6932,-1.6408],[115.6876,-1.6448],[115.6876,-1.6541],[115.6737,-1.6672],[115.6732,-1.6623],[115.6768,-1.6562],[115.6745,-1.6518],[115.6751,-1.6497],[115.6697,-1.6433],[115.67,-1.6303],[115.6726,-1.6253],[115.6525,-1.5551],[115.6518,-1.5144],[115.6555,-1.5127],[115.6518,-1.5122],[115.6509,-1.4626],[115.6638,-1.4612],[115.6691,-1.4564],[115.6785,-1.4562],[115.6821,-1.4471],[115.6852,-1.4465],[115.6886,-1.4486],[115.6881,-1.4422],[115.6917,-1.4345],[115.6918,-1.4258],[115.6937,-1.4243],[115.6976,-1.4252],[115.6977,-1.4199],[115.7018,-1.4181],[115.7284,-1.4182],[115.7594,-1.3971],[115.7608,-1.3996],[115.758,-1.4013],[115.758,-1.4031],[115.756,-1.4033],[115.7576,-1.4066],[115.7519,-1.4067],[115.7505,-1.4099],[115.7476,-1.4089],[115.7479,-1.4066],[115.7461,-1.4069],[115.746,-1.4096],[115.7491,-1.4139],[115.7472,-1.4144],[115.7461,-1.4121],[115.7449,-1.4153],[115.749,-1.4184],[115.7461,-1.4202],[115.7459,-1.4223],[115.7438,-1.422],[115.7445,-1.4243],[115.7421,-1.4257],[115.7448,-1.4258],[115.7432,-1.4279],[115.744,-1.4291],[115.7409,-1.4299],[115.7416,-1.4332],[115.739,-1.4338],[115.7409,-1.4356],[115.7434,-1.4334],[115.7442,-1.4365],[115.7469,-1.4346],[115.7488,-1.4381],[115.7468,-1.4403],[115.7438,-1.4396],[115.7462,-1.4484],[115.7488,-1.4512],[115.745,-1.4522],[115.7424,-1.4553],[115.7373,-1.4559],[115.7436,-1.4586],[115.7431,-1.4603],[115.7457,-1.4588],[115.7431,-1.4637],[115.7378,-1.4656],[115.7389,-1.474],[115.7407,-1.4751],[115.7439,-1.4737],[115.7451,-1.4775],[115.7421,-1.4778],[115.7397,-1.4759],[115.7324,-1.4793],[115.7364,-1.4778],[115.737,-1.4801],[115.7397,-1.4802],[115.7412,-1.486],[115.7429,-1.4856],[115.7427,-1.4882],[115.741,-1.4899],[115.7398,-1.4861],[115.7386,-1.4869],[115.7392,-1.4894],[115.7347,-1.4883],[115.725,-1.4999],[115.7267,-1.504],[115.7287,-1.5039],[115.7287,-1.5061],[115.7324,-1.5054],[115.7323,-1.5069],[115.7293,-1.5074],[115.7302,-1.5098],[115.7267,-1.5082],[115.7267,-1.5114],[115.7285,-1.5152],[115.7328,-1.5163],[115.7325,-1.5199],[115.7355,-1.5197],[115.7336,-1.5218],[115.7371,-1.5233]]]}
+  ]
+};
+/* =============================================== */
+const $=id=>document.getElementById(id);
+const SAT={VIIRS_SNPP_NRT:'VIIRS S-NPP',VIIRS_NOAA20_NRT:'VIIRS NOAA-20',VIIRS_NOAA21_NRT:'VIIRS NOAA-21',MODIS_NRT:'MODIS',ORORA:'OroraTech'};
+
+const map=L.map('map',{zoomControl:true,attributionControl:false,zoomSnap:0.25});
+const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19}).addTo(map);
+const jalan=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19});
+L.control.layers({'Satelit':sat,'Peta jalan':jalan},null,{position:'topright'}).addTo(map);
+const grp=L.featureGroup().addTo(map);
+CONFIG.DISTRIK.forEach(d=>d.rings.forEach(r=>L.polygon(r.map(p=>[p[1],p[0]]),{color:d.warna,weight:2,fillOpacity:.05}).addTo(grp)));
+map.fitBounds(grp.getBounds(),{padding:[10,10]});
+const lay=L.layerGroup().addTo(map);
+
+/* ---------- Geometri ---------- */
+function inside(lon,lat,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const[xi,yi]=poly[i],[xj,yj]=poly[j];if((yi>lat)!==(yj>lat)&&lon<(xj-xi)*(lat-yi)/(yj-yi)+xi)c=!c}return c}
+const distrikDari=(lon,lat)=>CONFIG.DISTRIK.find(d=>d.rings.some(r=>inside(lon,lat,r)));
+/* Jarak (meter) titik ke batas konsesi terdekat; 0 jika berada di dalam */
+function jarakKePoligon(lon,lat){
+  let best=Infinity,kode=null;const k=Math.cos(lat*Math.PI/180)*111320;
+  for(const d of CONFIG.DISTRIK)for(const r of d.rings){
+    if(inside(lon,lat,r))return {m:0,kode:d.kode};
+    for(let i=0,j=r.length-1;i<r.length;j=i++){
+      const ax=(r[j][0]-lon)*k,ay=(r[j][1]-lat)*110574,bx=(r[i][0]-lon)*k,by=(r[i][1]-lat)*110574;
+      const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;let u=l2?-(ax*dx+ay*dy)/l2:0;u=Math.max(0,Math.min(1,u));
+      const dd=Math.hypot(ax+u*dx,ay+u*dy);if(dd<best){best=dd;kode=d.kode}
+    }
+  }
+  return {m:best,kode};
+}
+function jarak(a,b){const R=6371000,t=Math.PI/180,dl=(b.lat-a.lat)*t,dn=(b.lon-a.lon)*t;
+  const x=Math.sin(dl/2)**2+Math.cos(a.lat*t)*Math.cos(b.lat*t)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+const allPts=CONFIG.DISTRIK.flatMap(d=>d.rings.flat());
+const BBOX=[Math.min(...allPts.map(p=>p[0])),Math.min(...allPts.map(p=>p[1])),Math.max(...allPts.map(p=>p[0])),Math.max(...allPts.map(p=>p[1]))];
+
+/* ---------- Data hotspot FIRMS (lewat Apps Script) ---------- */
+function demo(){
+  const out=[],now=Date.now(),ks=Object.keys(SAT);
+  for(let k=0;k<6;k++){const d=CONFIG.DISTRIK[k%4],r=d.rings[0],v=r[Math.floor(Math.random()*r.length)];
+    const lat0=v[1]+(Math.random()-.5)*.05,lon0=v[0]+(Math.random()-.5)*.05;
+    if(!distrikDari(lon0,lat0))continue;const t0=now-Math.random()*10*36e5;
+    for(let m=0;m<1+Math.floor(Math.random()*4);m++)out.push({lat:lat0+(Math.random()-.5)*.012,lon:lon0+(Math.random()-.5)*.012,time:new Date(t0+m*36e5/4),conf:'n',sat:ks[m%4],frp:5})}
+  return {pts:out,gagal:[]};
+}
+async function ambil(){
+  if(!CONFIG.API_URL)return demo();
+  const d=await ambilApi(CONFIG.API_URL+'?aksi=hotspot',45000);
+  if(d.err)throw new Error(d.err);
+  const seen=new Set();
+  const pts=(d.pts||[]).map(r=>{let c=String(r[3]).toLowerCase();if(/^\d+$/.test(c)){const n=+c;c=n<30?'l':n<80?'n':'h'}
+    return {lat:+r[0],lon:+r[1],time:new Date(r[2]),conf:c,sat:r[4],frp:0}})
+    .filter(h=>{const k=h.sat+h.time.getTime()+h.lat.toFixed(3)+h.lon.toFixed(3);if(seen.has(k))return false;seen.add(k);return true});
+  return {pts,gagal:d.gagal||[]};
+}
+
+/* ---------- OroraTech (input manual lewat sheet ORORA) ---------- */
+function jsonp(url,ms){
+  return new Promise((res,rej)=>{
+    const cb='cb'+Date.now(),s=document.createElement('script');
+    const end=()=>{clearTimeout(to);delete window[cb];s.remove()};
+    const to=setTimeout(()=>{end();rej(new Error('Apps Script tidak merespons (periksa izin dan deploy)'))},ms||15000);
+    window[cb]=d=>{end();res(d)};s.onerror=()=>{end();rej(new Error('Apps Script gagal dimuat'))};
+    s.src=url+(url.includes('?')?'&':'?')+'callback='+cb;document.head.appendChild(s);
+  });
+}
+/* Dua jalur: tag skrip (JSONP) lebih dulu, lalu fetch biasa sebagai cadangan (sebagian peramban HP memblokir salah satunya) */
+async function ambilApi(url,ms){
+  try{return await jsonp(url,ms)}
+  catch(e1){
+    try{
+      const r=await fetch(url,{cache:'no-store',credentials:'omit'});
+      return JSON.parse(await r.text());
+    }catch(e2){throw new Error(e1.message+' | fetch: '+(e2.message||e2))}
+  }
+}
+async function ambilOrora(){
+  if(!CONFIG.API_URL)return [];
+  const d=await ambilApi(CONFIG.API_URL);
+  return (d.orora||[]).map(o=>({lat:+o.lat,lon:+o.lon,time:new Date(o.t),cat:o.cat||'',conf:'h',sat:'ORORA',frp:0,orora:true}));
+}
+
+/* ---------- Klaster ---------- */
+function kodeUmum(m){const c={};m.forEach(x=>{if(x.kode)c[x.kode]=(c[x.kode]||0)+1});return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||'-'}
+const judul=c=>`${c.n} titik | ${c.kode}${c.luar?' (luar batas ±'+c.jarakKm+' km)':''}`;
+function buatKlaster(pts){
+  const p=pts.map((_,i)=>i),f=i=>p[i]===i?i:(p[i]=f(p[i]));
+  for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++)if(jarak(pts[i],pts[j])<=CONFIG.KLASTER_METER)p[f(j)]=f(i);
+  const g={};pts.forEach((x,i)=>(g[f(i)]=g[f(i)]||[]).push(x));
+  return Object.values(g).map(m=>{
+    const lat=m.reduce((a,x)=>a+x.lat,0)/m.length,lon=m.reduce((a,x)=>a+x.lon,0)/m.length;
+    const t=m.map(x=>+x.time);
+    return {m,lat,lon,n:m.length,orora:m.some(x=>x.orora),tMin:Math.min(...t),tMax:Math.max(...t),kode:kodeUmum(m),luar:m.every(x=>x.luar),jarakKm:(Math.min(...m.map(x=>x.dm||0))/1000).toFixed(1),
+      sats:[...new Set(m.map(x=>SAT[x.sat]||'demo'))]};
+  }).sort((a,b)=>b.tMax-a.tMax);
+}
+
+/* ---------- Tampilan ---------- */
+let klaster=[],saya=null,sayaMarker=null;
+const warna=c=>{const u=(Date.now()-c.tMax)/36e5;return u<6?'#e53935':u<24?'#fb8c00':'#fdd835'};
+const jamStr=t=>new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+function umur(t){const m=Math.round((Date.now()-t)/6e4);return m<60?m+' menit lalu':Math.floor(m/60)+' jam '+(m%60)+' mnt lalu'}
+const koor=c=>c.lat.toFixed(5)+', '+c.lon.toFixed(5);
+const jrk=c=>saya?(jarak(saya,c)/1000).toFixed(1)+' km dari Anda':'';
+function salinTeks(t){
+  const cadangan=()=>{const a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.opacity=0;document.body.appendChild(a);a.select();
+    try{document.execCommand('copy');alert('Koordinat disalin')}catch(e){prompt('Salin koordinat:',t)}a.remove()};
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(t).then(()=>alert('Koordinat disalin'),cadangan);else cadangan();
+}
+const titikBaris=c=>c.m.slice().sort((a,b)=>b.time-a.time).map((x,i)=>`${i+1}. ${x.lat.toFixed(5)}, ${x.lon.toFixed(5)} | ${jamSaja(x.time)} | ${SAT[x.sat]||'demo'}${x.cat?' | '+x.cat:''}`);
+const teksKlaster=c=>`Pusat: ${koor(c)}\n`+titikBaris(c).join('\n');
+window.salinKlaster=i=>salinTeks(teksKlaster(klaster[i]));
+const jamSaja=x=>new Date(x).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+function banding(c){
+  const o=c.m.filter(x=>x.orora);if(!o.length)return '';
+  const t0=Math.min(...o.map(x=>+x.time)),f=c.m.filter(x=>!x.orora);
+  if(!f.length)return `Orora ${jamSaja(t0)} | FIRMS belum`;
+  const tf=Math.min(...f.map(x=>+x.time)),d=Math.round((tf-t0)/6e4),a=Math.abs(d),s=(a>=60?Math.floor(a/60)+' j ':'')+(a%60)+' mnt';
+  return `Orora ${jamSaja(t0)} | FIRMS ${jamSaja(tf)} (${s} ${d>=0?'setelah':'sebelum'})`;
+}
+function popup(c){
+  const gm=`https://www.google.com/maps?q=${c.lat},${c.lon}`,nav=`https://www.google.com/maps/dir/?api=1&destination=${c.lat},${c.lon}`,b=banding(c);
+  return `<div class="pop"><h3>${judul(c)}</h3>
+    <div>${umur(c.tMax)}${saya?' | '+jrk(c):''}</div>
+    ${b?'<div style="color:#7b1fa2;font-weight:600">'+b+'</div>':''}
+    <div class="k">Pusat: ${koor(c)}</div>
+    <div class="pts">${titikBaris(c).join('<br>')}</div>
+    <a href="${nav}" target="_blank">Navigasi</a><a href="${gm}" target="_blank">Buka peta</a><button onclick="salinKlaster(${c.id})">Salin semua</button></div>`;
+}
+function gambar(){
+  lay.clearLayers();
+  klaster.forEach(c=>{
+    const w=warna(c),s=26+Math.min(c.n,8)*3;
+    c.marker=L.marker([c.lat,c.lon],{icon:L.divIcon({className:'',iconSize:[s,s],iconAnchor:[s/2,s/2],html:`<div class="cl" style="width:${s}px;height:${s}px;background:${w};border-color:${c.orora?'#c040ff':'#fff'}">${c.n}</div>`})}).bindPopup(()=>popup(c),{maxWidth:340}).addTo(lay);
+    c.m.forEach(x=>L.circleMarker([x.lat,x.lon],{radius:4,color:'#fff',weight:1,fillColor:x.orora?'#c040ff':w,fillOpacity:1}).on('click',()=>c.marker.openPopup()).addTo(lay));
+  });
+  $('list').innerHTML=klaster.length?klaster.map((c,i)=>`<div class="it" data-i="${i}"><div class="dot" style="background:${warna(c)}"></div><div><b>${judul(c)}</b><span>${koor(c)}</span><span>${umur(c.tMax)} ${saya?' | '+jrk(c):''}</span>${banding(c)?'<span style="color:#d98cff">'+banding(c)+'</span>':''}</div></div>`).join(''):'<div class="empty">Tidak ada hotspot dalam '+CONFIG.JAM_TAMPIL+' jam terakhir di dalam atau sekitar area (±'+CONFIG.BUFFER_KM+' km).</div>';
+}
+$('list').addEventListener('click',e=>{const it=e.target.closest('.it');if(!it)return;const c=klaster[+it.dataset.i];map.setView([c.lat,c.lon],Math.max(map.getZoom(),14));c.marker.openPopup()});
+
+async function muat(){
+  $('ket').textContent='Memuat data...';
+  try{
+    const [{pts,gagal},oro]=await Promise.all([ambil(),ambilOrora().catch(()=>null)]),now=Date.now();
+    const maks=Math.max(CONFIG.JAM_TAMPIL,CONFIG.ORORA_JAM)*36e5;
+    const tandai=(x,batas)=>{const r=jarakKePoligon(x.lon,x.lat);x.dm=r.m;x.luar=r.m>0;x.kode=r.m<=batas?r.kode:null;return x};
+    const firms=pts.filter(x=>now-x.time<=maks&&!(CONFIG.SEMBUNYIKAN_LOW&&x.conf==='l')).map(x=>tandai(x,CONFIG.BUFFER_KM*1000)).filter(x=>x.dm<=CONFIG.BUFFER_KM*1000);
+    const p=firms.concat((oro||[]).filter(x=>now-x.time<=CONFIG.ORORA_JAM*36e5).map(x=>{const r=jarakKePoligon(x.lon,x.lat);x.dm=r.m;x.luar=r.m>0;x.kode=r.kode;return x}));
+    klaster=buatKlaster(p).filter(c=>c.orora||now-c.tMax<=CONFIG.JAM_TAMPIL*36e5);
+    const jmlTitik=klaster.reduce((a,c)=>a+c.n,0);
+    klaster.forEach((c,i)=>c.id=i);
+    gambar();
+    $('ket').textContent=`v9 | ${klaster.length} klaster | ${jmlTitik} titik | FIRMS ${pts.length} diterima, ${firms.length} di area | ${new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}`+(CONFIG.API_URL?'':' | DEMO')+(gagal.length?' | sumber gagal: '+gagal.length:'')+(CONFIG.API_URL?(oro===null?' | OroraTech gagal dimuat':' | OroraTech: '+oro.length+' titik'):'');
+  }catch(e){
+    $('ket').textContent='v9 | Gagal memuat: '+e.message+' ';
+    if(CONFIG.API_URL){const l=document.createElement('a');l.href=CONFIG.API_URL+'?aksi=hotspot';l.target='_blank';l.textContent='[uji alamat]';l.style.color='#8ab4f8';$('ket').appendChild(l)}
+  }
+}
+$('bRef').onclick=muat;
+$('bGPS').onclick=()=>{
+  if(!navigator.geolocation)return alert('Perangkat tidak mendukung lokasi');
+  navigator.geolocation.getCurrentPosition(p=>{
+    saya={lat:p.coords.latitude,lon:p.coords.longitude};
+    if(sayaMarker)map.removeLayer(sayaMarker);
+    sayaMarker=L.circleMarker([saya.lat,saya.lon],{radius:8,color:'#fff',weight:3,fillColor:'#1a73e8',fillOpacity:1}).addTo(map);
+    gambar();map.setView([saya.lat,saya.lon],Math.max(map.getZoom(),12));
+  },()=>alert('Lokasi tidak bisa diambil. Izinkan akses lokasi di peramban.'),{enableHighAccuracy:true,timeout:15000});
+};
+muat();setInterval(muat,CONFIG.REFRESH_MIN*60000);
+</script>
+</body>
+</html>
